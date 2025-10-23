@@ -11,7 +11,7 @@ let scoreText = ""; // 用於 p5.js 繪圖的文字
 
 // 【新增】煙火特效相關全域變數
 let particles = []; // 用於儲存爆炸粒子
-let explosionTriggered = false; // 追蹤是否已觸發爆炸
+let isAnimating = false; // 追蹤是否正在進行動畫
 
 window.addEventListener('message', function (event) {
     // 執行來源驗證...
@@ -27,18 +27,15 @@ window.addEventListener('message', function (event) {
         
         console.log("新的分數已接收:", scoreText); 
         
-        // 【新增】檢查是否達到滿分來重設爆炸狀態
-        if (finalScore === maxScore && maxScore > 0) {
-             // 滿分且 maxScore 有效時，準備觸發爆炸
-             explosionTriggered = false; 
-        } else {
-             // 非滿分或分數重設時，重設爆炸狀態
-             explosionTriggered = true; // 設為 true 避免非滿分時意外觸發
-             particles = []; // 清空粒子
+        // 【優化】當收到新的分數時，停止所有動畫並清空粒子。
+        if (isAnimating) {
+             noLoop();
+             isAnimating = false;
         }
+        particles = []; // 清空粒子
         
         // ----------------------------------------
-        // 關鍵步驟 2: 呼叫重新繪製 (見方案二)
+        // 關鍵步驟 2: 呼叫重新繪製
         // ----------------------------------------
         if (typeof redraw === 'function') {
             redraw(); 
@@ -57,27 +54,27 @@ class ExplosionParticle {
         this.pos = createVector(x, y);
         // 隨機方向和速度
         this.vel = p5.Vector.random2D();
-        this.vel.mult(random(2, 10)); // 初速度
-        this.acc = createVector(0, 0);
+        this.vel.mult(random(2, 8)); // 初速度
         this.lifespan = 255;
         this.hu = hue;
         this.gravity = createVector(0, 0.1); // 簡化重力
     }
 
     update() {
-        this.vel.add(this.acc);
         this.vel.add(this.gravity);
         this.pos.add(this.vel);
-        this.acc.mult(0);
-        this.lifespan -= 5;
+        this.lifespan -= 4; // 讓它淡出得快一點
     }
 
     show() {
+        // 臨時切換到 HSB 模式繪製粒子
+        push(); // 儲存當前的繪圖設定
         colorMode(HSB, 255);
         strokeWeight(3);
-        stroke(this.hu, 255, 255, this.lifespan);
+        // 使用 this.hu 作為色相，lifespan 作為透明度 (Alpha)
+        stroke(this.hu, 255, 255, this.lifespan); 
         point(this.pos.x, this.pos.y);
-        colorMode(RGB, 255); // 恢復預設顏色模式
+        pop(); // 恢復之前的繪圖設定 (RGB)
     }
 
     isFinished() {
@@ -90,24 +87,26 @@ function setup() {
     // ... (其他設置)
     createCanvas(windowWidth / 2, windowHeight / 2); 
     background(255); 
-    noLoop(); // 如果您希望分數只有在改變時才繪製，保留此行
-    colorMode(RGB, 255); // 確保顏色模式為 RGB (p5.js 預設值)
+    colorMode(RGB, 255); // 確保預設為 RGB 模式 (用於文字和背景)
+    noLoop(); // 預設停止迴圈，只在分數改變或動畫時繪製
 } 
 
 // score_display.js 中的 draw() 函數片段
 
 function draw() { 
+    // 【優化】為了解決動畫時的殘影問題，使用帶有透明度的背景，
+    // 但因為這裡的動畫很短，先使用不透明背景確保畫面清晰。
     background(255); // 清除背景
-
+    
     // 計算百分比
     let percentage = (finalScore / maxScore) * 100;
-
-    textSize(80); 
-    textAlign(CENTER);
     
     // -----------------------------------------------------------------
     // A. 根據分數區間改變文本顏色和內容 (畫面反映一)
     // -----------------------------------------------------------------
+    textSize(80); 
+    textAlign(CENTER);
+    
     if (percentage >= 90) {
         // 滿分或高分：顯示鼓勵文本，使用鮮豔顏色
         fill(0, 200, 50); // 綠色 [6]
@@ -156,16 +155,16 @@ function draw() {
     // 【新增】C. 滿分時觸發煙火特效
     // -----------------------------------------------------------------
     
-    if (percentage === 100 && !explosionTriggered) {
+    if (percentage === 100 && !isAnimating) {
         
         // 1. 觸發爆炸並進入持續繪圖模式
-        explosionTriggered = true; 
+        isAnimating = true; 
         loop(); // 啟動 draw 迴圈以實現動畫
 
         // 2. 初始化粒子
-        let particleCount = 60;
+        let particleCount = 70; // 增加粒子數量
         let explosionX = width / 2; // 爆炸中心 X
-        let explosionY = height / 2 + 150; // 爆炸中心 Y (在幾何圖形上方一點)
+        let explosionY = height / 2 + 150; // 爆炸中心 Y 
         let randomHue = random(255); // 隨機顏色
         
         for (let i = 0; i < particleCount; i++) {
@@ -185,13 +184,9 @@ function draw() {
     }
     
     // 4. 當所有粒子都消失後，停止 draw 迴圈
-    if (explosionTriggered && particles.length === 0) {
+    if (isAnimating && particles.length === 0) {
         noLoop();
-        explosionTriggered = false; // 重設狀態，準備下一次滿分
-        // 這裡需要手動呼叫一次 redraw 以確保靜止畫面是最新的 (雖然 noLoop() 會在下一次 redraw() 後生效)
-        // 由於前面已經有 background(255)，所以可以讓它自然停止。
+        isAnimating = false; // 重設狀態，準備下一次滿分
+        // 由於我們在開頭呼叫了 background(255)，所以不需要額外的 redraw()
     }
-    
-    // 如果您想要更複雜的視覺效果，還可以根據分數修改線條粗細 (strokeWeight) 
-    // 或使用 sin/cos 函數讓圖案的動畫效果有所不同 [8, 9]。
 }
