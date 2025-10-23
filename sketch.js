@@ -106,6 +106,29 @@ function draw() {
     // -----------------------------------------------------------------
     textSize(80); 
     textAlign(CENTER);
+
+    // ... (其他繪圖邏輯)
+
+    // 【新增】C. 滿分時觸發煙火特效
+    if (percentage === 100 && !isAnimating) {
+        
+        isAnimating = true; 
+        loop(); // 啟動 draw 迴圈以實現動畫
+
+        // 2. 初始化粒子 (確保 ExplosionParticle 類別定義在全域)
+        // ... (粒子初始化程式碼)
+    }
+    
+    // 3. 更新和繪製粒子
+    for (let i = particles.length - 1; i >= 0; i--) {
+        // ... (粒子更新和顯示程式碼)
+    }
+    
+    // 4. 當所有粒子都消失後，停止 draw 迴圈
+    if (isAnimating && particles.length === 0) {
+        noLoop();
+        isAnimating = false; 
+    }
     
     if (percentage >= 90) {
         // 滿分或高分：顯示鼓勵文本，使用鮮豔顏色
